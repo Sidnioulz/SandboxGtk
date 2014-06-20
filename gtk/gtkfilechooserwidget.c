@@ -76,6 +76,7 @@
 #include "gtktreeselection.h"
 #include "gtkbox.h"
 #include "gtkorientable.h"
+#include "gtkwindowgroup.h"
 #include "gtkintl.h"
 
 #include <cairo-gobject.h>
@@ -1944,6 +1945,30 @@ location_entry_create (GtkFileChooserWidget *impl)
   gtk_entry_set_activates_default (GTK_ENTRY (priv->location_entry), TRUE);
 }
 
+/* Shows and hides the autocompletion widget popover in Save mode */
+static void
+on_autocompletion_button_toggled (GtkToggleButton *togglebutton,
+                                  gpointer         user_data)
+{
+  static GtkWidget tmppop = NULL;
+  
+  if (!tmppop)
+  {
+    tmppop = gtk_popover_new (togglebutton);
+  }
+
+  if (!gtk_toggle_button_get_active (togglebutton))
+  {
+    gtk_widget_hide (tmppop);
+  
+  }
+  else
+  {
+    gtk_widget_show (tmppop);
+  
+  }
+}
+
 /* Creates the widgets specific to Save mode */
 static void
 save_widgets_create (GtkFileChooserWidget *impl)
@@ -1984,6 +2009,15 @@ save_widgets_create (GtkFileChooserWidget *impl)
   gtk_grid_attach (GTK_GRID (priv->save_widgets_table), priv->location_entry, 1, 0, 1, 1);
   gtk_widget_show (priv->location_entry);
   gtk_label_set_mnemonic_widget (GTK_LABEL (widget), priv->location_entry);
+
+  /* Autocompletion button */
+
+  widget = gtk_button_new_with_mnemonic (_("File _Type: ##s"));
+  gtk_grid_attach (GTK_GRID (priv->save_widgets_table), widget, 2, 0, 1, 1);
+  g_signal_connect (widget, "toggled",
+                    G_CALLBACK (on_autocompletion_button_toggled),
+                    impl);
+  gtk_widget_show (widget);
 
   priv->save_widgets = vbox;
   gtk_box_pack_start (GTK_BOX (impl), priv->save_widgets, FALSE, FALSE, 0);
