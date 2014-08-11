@@ -38,4 +38,7 @@
     <file compressed="true">ui/gtkvolumebutton.ui</file>
     <file compressed="true">ui/gtkapplication-quartz.ui</file>
   </gresource>
+  <gresource prefix="/org/mupuf/sandboxutils/">
+    <file compressed="true">ui/gtkfilechoosertypepicker.ui</file>
+  </gresource>
 </gresources>

@@ -460,6 +460,22 @@ gtk_file_chooser_default_init (GtkFileChooserInterface *iface)
 								"will offer the user to create new folders."),
 							     TRUE,
 							     GTK_PARAM_READWRITE));
+
+  /**
+   * GtkFileChooser:current-extension-supported:
+   * 
+   * Returns %TRUE if the current extension of a %GTK_FILE_CHOOSER_ACTION_SAVE
+   * mode file chooser is supported by the application or if unsupported
+   * extensions are accepted by the file chooser.
+   *
+   * Since: N/A
+   */
+  g_object_interface_install_property (iface,
+				       g_param_spec_boolean ("current-extension-supported",
+							     P_("Current extension supported"),
+							     P_("Whether the app supports the extension of the current filename"),
+							     TRUE,
+							     GTK_PARAM_READABLE));
 }
 
 /**
@@ -1009,6 +1025,332 @@ gtk_file_chooser_get_current_name (GtkFileChooser *chooser)
   g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), NULL);
 
   return GTK_FILE_CHOOSER_GET_IFACE (chooser)->get_current_name (chooser);
+}
+
+/**
+ * gtk_file_chooser_add_extension:
+ * @chooser: a #GtkFileChooser
+ * @file_type: a displayable, translatable label that describes the file format
+ * associated with this extension
+ * @extension: a non-translatable, lower-character extension in ASCII characters,
+ * including a starting dot
+ * 
+ * Adds an extension to the file chooser's file type picker. If no other extension
+ * had previously been added, this will cause the type picker to be displayed
+ * when using @chooser to save files. Users will be able to select a file type
+ * directly from the type picker, which will automatically replace the existing
+ * extension in the filename they typed with the other corresponding to their
+ * selection.
+ *
+ * The type picker is useful for apps that handle multiple formats and that need
+ * to know which one the user wants to save in, like image or archive editors.
+ * To force the user to type an extension that your application supports, see
+ * gtk_file_chooser_set_force_valid_extension(). To validate yourself whether the
+ * user typed a valid extension in the @chooser's location bar, see
+ * gtk_file_chooser_get_current_extension_supported().
+ *
+ * Applications that previously used gtk_file_chooser_get_current_name and
+ * manually replaced the extension provided by the user are encouraged to use the
+ * type picker instead. In the future, sandboxed apps will only be allowed to
+ * write to specific paths authorised by the OS, and will no longer be able to
+ * modify the path they want to save to themselves. Applications that use the
+ * type picker will be easier to deploy in a sandbox environment, where the 
+ * @chooser can be run by a trusted third-party process.
+ * 
+ * Since: N/A (not affiliated with GTK+)
+ **/
+void
+gtk_file_chooser_add_extension    (GtkFileChooser *chooser,
+                                   const gchar    *file_type,
+                                   const gchar    *extension)
+{
+  g_return_if_fail (GTK_IS_FILE_CHOOSER (chooser));
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->add_extension)
+    GTK_FILE_CHOOSER_GET_IFACE (chooser)->add_extension (chooser, file_type, extension);
+}
+
+/**
+ * gtk_file_chooser_remove_extension:
+ * @chooser: a #GtkFileChooser
+ * @file_type: the file type label that was given when adding the extension to
+ * the @chooser
+ * @extension: the extension string that was given when adding the extension to
+ * the @chooser
+ *
+ * Removes an extension entry from the type picker, if it matches @file_type and
+ * @extension. Either of these two parameters can be %NULL, in which case the
+ * first matching extension will be removed.
+ *
+ * Returns: %TRUE if the entry was successfully removed, %FALSE otherwise.
+ *
+ * See also: gtk_file_chooser_add_extension().
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gboolean
+gtk_file_chooser_remove_extension (GtkFileChooser *chooser,
+                                   const gchar    *file_type,
+                                   const gchar    *extension)
+{
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), FALSE);
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->remove_extension)
+    return GTK_FILE_CHOOSER_GET_IFACE (chooser)->remove_extension (chooser, file_type, extension);
+  else
+    return FALSE;
+}
+
+/**
+ * gtk_file_chooser_clear_extensions:
+ * @chooser: a #GtkFileChooser
+ *
+ * Removes all extension entries from the type picker, and causes it to no longer
+ * be displayed until extensions are added again.
+ *
+ * See also: gtk_file_chooser_add_extension().
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+void
+gtk_file_chooser_clear_extensions (GtkFileChooser *chooser)
+{
+  g_return_if_fail (GTK_IS_FILE_CHOOSER (chooser));
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->clear_extensions)
+    GTK_FILE_CHOOSER_GET_IFACE (chooser)->clear_extensions (chooser);
+}
+
+/**
+ * gtk_file_chooser_get_force_valid_extension:
+ * @chooser: a #GtkFileChooser
+ * 
+ * Gets whether the file chooser (if in %GTK_FILE_CHOOSER_ACTION_SAVE mode) will
+ * prevent saving files with extensions that have not been previously registered
+ * as valid. See gtk_file_chooser_set_force_valid_extension().
+ * 
+ * Returns: %TRUE if the file chooser enforces valid extensions, %FALSE
+ * otherwise.
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gboolean
+gtk_file_chooser_get_force_valid_extension (GtkFileChooser *chooser)
+{
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), FALSE);
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->get_force_valid_extension)
+    return GTK_FILE_CHOOSER_GET_IFACE (chooser)->get_force_valid_extension (chooser);
+  else
+    return FALSE;
+}
+
+/**
+ * gtk_file_chooser_set_force_valid_extension:
+ * @chooser: a #GtkFileChooser
+ * @force_valid: whether to enforce valid extensions
+ * 
+ * Sets whether the file chooser (if in %GTK_FILE_CHOOSER_ACTION_SAVE mode) will
+ * prevent saving files with extensions that have not been previously registered
+ * as valid by the app owning this file chooser.
+ * 
+ * Since: N/A (not affiliated with GTK+)
+ **/
+void
+gtk_file_chooser_set_force_valid_extension (GtkFileChooser *chooser,
+                                            gboolean force_valid_extension)
+{
+  g_return_if_fail (GTK_IS_FILE_CHOOSER (chooser));
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_force_valid_extension)
+    GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_force_valid_extension (chooser, force_valid_extension);
+}
+
+/**
+ * gtk_file_chooser_set_current_extension_full:
+ * @chooser: a #GtkFileChooser
+ * @file_type: the file type label of the type picker entry to activate
+ * @extension: the extension string of the type picker entry to activate
+ * 
+ * Activates an entry in @chooser's type picker. Causes the current filename in
+ * the location bar to be appended with that entry's extension (or its existing
+ * extension to be replaced with that one). If you want to match only a file type
+ * or extension (i.e., if you don't use the same extension for multiple file
+ * formats), you may also use gtk_file_chooser_set_current_file_type() and
+ * gtk_file_chooser_set_current_extension().
+ *
+ * It only really makes sense to use that function when initialising @chooser,
+ * to pick a default extension. The location bar entry and the type picker
+ * synchronise with each other without any effort on your behalf.
+ * 
+ * Returns: %TRUE if the entry could be found and activated, %FALSE
+ * otherwise.
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gboolean
+gtk_file_chooser_set_current_extension_full (GtkFileChooser *chooser,
+                                             const gchar    *file_type,
+                                             const gchar    *extension)
+{
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), FALSE);
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_current_extension_full)
+    return GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_current_extension_full (chooser, file_type, extension);
+  else
+    return FALSE;
+}
+
+/**
+ * gtk_file_chooser_set_current_extension:
+ * @chooser: a #GtkFileChooser
+ * @extension: the extension string of the type picker entry to activate
+ * 
+ * Activates an entry in @chooser's type picker. Causes the current filename in
+ * the location bar to be appended with that entry's extension (or its existing
+ * extension to be replaced with that one). This function matches the first
+ * entry whose extension matches @extension. If you have multiple entries with
+ * that extension, you can match a specific entry by using
+ * gtk_file_chooser_set_current_extension_full().
+ * 
+ * It only really makes sense to use that function when initialising @chooser,
+ * to pick a default extension. The location bar entry and the type picker
+ * synchronise with each other without any effort on your behalf.
+ * 
+ * Returns: %TRUE if the entry could be found and activated, %FALSE
+ * otherwise.
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gboolean
+gtk_file_chooser_set_current_extension (GtkFileChooser *chooser,
+                                        const gchar    *extension)
+{
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), FALSE);
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_current_extension)
+    return GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_current_extension (chooser, extension);
+  else
+    return FALSE;
+}
+
+/**
+ * gtk_file_chooser_set_current_file_type:
+ * @chooser: a #GtkFileChooser
+ * @file_type: the file type label of the type picker entry to activate
+ * 
+ * Activates an entry in @chooser's type picker. Causes the current filename in
+ * the location bar to be appended with that entry's extension (or its existing
+ * extension to be replaced with that one). This function matches the first
+ * entry whose file type matches @file_type. If you have multiple entries with
+ * that file type (not recommended), you can match a specific entry by using
+ * gtk_file_chooser_set_current_extension_full().
+ * 
+ * It only really makes sense to use that function when initialising @chooser,
+ * to pick a default extension. The location bar entry and the type picker
+ * synchronise with each other without any effort on your behalf.
+ * 
+ * Returns: %TRUE if the entry could be found and activated, %FALSE
+ * otherwise.
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gboolean
+gtk_file_chooser_set_current_file_type (GtkFileChooser *chooser,
+                                        const gchar    *file_type)
+{
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), FALSE);
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_current_file_type)
+    return GTK_FILE_CHOOSER_GET_IFACE (chooser)->set_current_file_type (chooser, file_type);
+  else
+    return FALSE;
+}
+
+/**
+ * gtk_file_chooser_get_current_extension:
+ * @chooser: a #GtkFileChooser
+ * 
+ * Returns the extension of the currently active entry in @chooser's type picker.
+ * You may use this information along with gtk_file_chooser_get_current_file_type()
+ * to know which file format the user expects you to save her file to.
+ * 
+ * Returns: a string representation of the extension corresponding to the format
+ * the user wants you to save her file to. This string is exactly what you had
+ * originally submitted when calling gtk_file_chooser_add_extension().
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gchar *
+gtk_file_chooser_get_current_extension (GtkFileChooser *chooser)
+{
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), NULL);
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->get_current_extension)
+    return GTK_FILE_CHOOSER_GET_IFACE (chooser)->get_current_extension (chooser);
+  else
+    return NULL;
+}
+
+
+/**
+ * gtk_file_chooser_get_current_file_type:
+ * @chooser: a #GtkFileChooser
+ * 
+ * Returns the file type label of the currently active entry in @chooser's type
+ * picker. You may use this information along with
+ * gtk_file_chooser_get_current_extension() to know which file format the user
+ * expects you to save her file to.
+ * 
+ * Returns: a description of the file format the user wants you to save her file
+ * to. This string is exactly what you had originally submitted when calling
+ * gtk_file_chooser_add_file_type().
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gchar *
+gtk_file_chooser_get_current_file_type (GtkFileChooser *chooser)
+{
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), NULL);
+
+  if (GTK_FILE_CHOOSER_GET_IFACE (chooser)->get_current_file_type)
+    return GTK_FILE_CHOOSER_GET_IFACE (chooser)->get_current_file_type (chooser);
+  else
+    return NULL;
+}
+
+/**
+ * gtk_file_chooser_get_current_extension_supported:
+ * @chooser: a #GtkFileChooser
+ * 
+ * Tells whether the filename currently contained in the location bar has an
+ * extension that was previously added in @chooser with
+ * gtk_file_chooser_add_extension(). This function can be used to check manually
+ * for an incorrect extension, if you prefer to let the user save to an invalid
+ * name and display an error, or impose a default format despite the typed name,
+ * instead of letting @chooser handle unsupported extensions. It is not useful
+ * to call this function after the user has picked a name in @chooser if you had
+ * previously forced valid extensions with gtk_file_chooser_set_force_valid_extension().
+ *
+ * Note that if your process is sandboxed, you should always honor the filename
+ * returned by @chooser. Writing to a different location on the filesystem is
+ * likely to fail.
+ * 
+ * Returns: whether the current filename in @chooser's location bar ends with
+ * an extension known to @chooser. 
+ *
+ * Since: N/A (not affiliated with GTK+)
+ **/
+gboolean
+gtk_file_chooser_get_current_extension_supported (GtkFileChooser *chooser)
+{
+  gboolean current_extension_supported;
+  
+  g_return_val_if_fail (GTK_IS_FILE_CHOOSER (chooser), FALSE);
+
+  g_object_get (chooser, "current-extension-supported", &current_extension_supported, NULL);
+
+  return current_extension_supported;
 }
 
 /**

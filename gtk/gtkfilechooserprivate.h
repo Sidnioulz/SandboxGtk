@@ -78,6 +78,26 @@ struct _GtkFileChooserIface
   void           (*remove_filter)      	   (GtkFileChooser    *chooser,
 					    GtkFileFilter     *filter);
   GSList *       (*list_filters)       	   (GtkFileChooser    *chooser);
+  void           (*add_extension)          (GtkFileChooser *picker,
+              const gchar       *file_type,
+              const gchar       *extension);
+  gboolean       (*remove_extension)       (GtkFileChooser *chooser,
+              const gchar       *file_type,
+              const gchar       *extension);
+  void           (*clear_extensions)       (GtkFileChooser *chooser);
+  void           (*set_force_valid_extension) (GtkFileChooser *chooser,
+              gboolean           force_valid_extension);
+  gboolean       (*get_force_valid_extension) (GtkFileChooser *chooser);
+  gboolean       (*set_current_extension_full) (GtkFileChooser *chooser,
+              const gchar       *file_type,
+              const gchar       *extension);
+  gboolean       (*set_current_extension)  (GtkFileChooser *chooser,
+              const gchar       *extension);
+  gboolean       (*set_current_file_type)  (GtkFileChooser *chooser,
+              const gchar       *file_type);
+  gchar *        (*get_current_extension)  (GtkFileChooser *chooser);
+  gchar *        (*get_current_file_type)  (GtkFileChooser *chooser);
+  gboolean       (*get_current_extension_supported) (GtkFileChooser *chooser);
   gboolean       (*add_shortcut_folder)    (GtkFileChooser    *chooser,
 					    GFile             *file,
 					    GError           **error);

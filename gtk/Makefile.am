@@ -570,6 +570,7 @@ gtk_private_h_sources =		\
 	gtkdialogprivate.h 	\
 	gtkentryprivate.h	\
 	gtkeventcontrollerprivate.h	\
+	gtkfilechoosertypepicker.h	\
 	gtkfilechooserembed.h	\
 	gtkfilechooserentry.h	\
 	gtkfilechooserprivate.h	\
@@ -895,7 +896,8 @@ gtk_base_c_sources = 		\
 	gtkeventcontroller.c	\
 	gtkexpander.c		\
 	gtkfilechooser.c	\
-	gtkfilechooserbutton.c	\
+	gtkfilechoosertypepicker.c	\
+  gtkfilechooserbutton.c	\
 	gtkfilechooserdialog.c	\
 	gtkfilechooserembed.c	\
 	gtkfilechooserentry.c	\
@@ -1301,6 +1303,7 @@ COMPOSITE_TEMPLATES =				\
 	resources/ui/gtkcolorchooserdialog.ui	\
 	resources/ui/gtkcoloreditor.ui		\
 	resources/ui/gtkdialog.ui		\
+	resources/ui/gtkfilechoosertypepicker.ui	\
 	resources/ui/gtkfilechooserbutton.ui	\
 	resources/ui/gtkfilechooserwidget.ui	\
 	resources/ui/gtkfilechooserdialog.ui	\

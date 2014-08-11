@@ -400,13 +400,24 @@ file_chooser_widget_selection_changed (GtkWidget            *widget,
   GtkWidget *button;
   GSList *uris;
   gboolean sensitive;
+  GtkFileChooser *chooser = GTK_FILE_CHOOSER (dialog->priv->widget);
 
   button = get_accept_action_widget (GTK_DIALOG (dialog), FALSE);
   if (button == NULL)
     return;
 
-  uris = gtk_file_chooser_get_uris (GTK_FILE_CHOOSER (dialog->priv->widget));
-  sensitive = (uris != NULL);
+  uris = gtk_file_chooser_get_uris (chooser);
+  
+  
+  if (gtk_file_chooser_get_action (chooser) == GTK_FILE_CHOOSER_ACTION_SAVE)
+  {
+    sensitive = (uris != NULL) &&
+                  gtk_file_chooser_get_current_extension_supported (chooser) &&
+                  gtk_file_chooser_get_force_valid_extension (chooser);
+  }
+  else
+    sensitive = (uris != NULL);
+  
   gtk_widget_set_sensitive (button, sensitive);
 
   if (uris)

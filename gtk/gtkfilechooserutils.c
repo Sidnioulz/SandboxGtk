@@ -42,6 +42,26 @@ static void           delegate_unselect_all           (GtkFileChooser    *choose
 static GSList *       delegate_get_files              (GtkFileChooser    *chooser);
 static GFile *        delegate_get_preview_file       (GtkFileChooser    *chooser);
 static GtkFileSystem *delegate_get_file_system        (GtkFileChooser    *chooser);
+static void           delegate_add_extension          (GtkFileChooser    *chooser,
+                      const gchar    *file_type,
+                      const gchar    *extension);
+static gboolean       delegate_remove_extension       (GtkFileChooser    *chooser,
+                      const gchar    *file_type,
+                      const gchar    *extension);
+static void           delegate_clear_extensions       (GtkFileChooser    *chooser);
+static void           delegate_set_force_valid_extension (GtkFileChooser *chooser,
+                      gboolean        force_valid_extension);
+static gboolean       delegate_get_force_valid_extension (GtkFileChooser *chooser);
+static gboolean       delegate_set_current_extension_full (GtkFileChooser *chooser,
+                      const gchar    *file_type,
+                      const gchar    *extension);
+static gboolean       delegate_set_current_extension  (GtkFileChooser    *chooser,
+                      const gchar    *extension);
+static gboolean       delegate_set_current_file_type  (GtkFileChooser    *chooser,
+                      const gchar    *file_type);
+static gchar *        delegate_get_current_extension  (GtkFileChooser    *chooser);
+static gchar *        delegate_get_current_file_type  (GtkFileChooser    *chooser);
+static gboolean       delegate_get_current_extension_supported (GtkFileChooser *chooser);
 static void           delegate_add_filter             (GtkFileChooser    *chooser,
 						       GtkFileFilter     *filter);
 static void           delegate_remove_filter          (GtkFileChooser    *chooser,
@@ -116,6 +136,9 @@ _gtk_file_chooser_install_properties (GObjectClass *klass)
   g_object_class_override_property (klass,
 				    GTK_FILE_CHOOSER_PROP_CREATE_FOLDERS,
 				    "create-folders");
+  g_object_class_override_property (klass,
+				    GTK_FILE_CHOOSER_PROP_CURRENT_EXTENSION_SUPPORTED,
+				    "current-extension-supported");
 }
 
 /**
@@ -143,6 +166,17 @@ _gtk_file_chooser_delegate_iface_init (GtkFileChooserIface *iface)
   iface->get_files = delegate_get_files;
   iface->get_preview_file = delegate_get_preview_file;
   iface->get_file_system = delegate_get_file_system;
+  iface->add_extension = delegate_add_extension;
+  iface->remove_extension = delegate_remove_extension;
+  iface->clear_extensions = delegate_clear_extensions;
+  iface->set_force_valid_extension = delegate_set_force_valid_extension;
+  iface->get_force_valid_extension = delegate_get_force_valid_extension;
+  iface->set_current_extension_full = delegate_set_current_extension_full;
+  iface->set_current_extension = delegate_set_current_extension;
+  iface->set_current_file_type = delegate_set_current_file_type;
+  iface->get_current_extension = delegate_get_current_extension;
+  iface->get_current_file_type = delegate_get_current_file_type;
+  iface->get_current_extension_supported = delegate_get_current_extension_supported;
   iface->add_filter = delegate_add_filter;
   iface->remove_filter = delegate_remove_filter;
   iface->list_filters = delegate_list_filters;
@@ -245,6 +279,81 @@ static GtkFileSystem *
 delegate_get_file_system (GtkFileChooser *chooser)
 {
   return _gtk_file_chooser_get_file_system (get_delegate (chooser));
+}
+
+void
+delegate_add_extension (GtkFileChooser *chooser,
+                        const gchar *file_type,
+                        const gchar *extension)
+{
+  gtk_file_chooser_add_extension (get_delegate (chooser), file_type, extension);
+}
+
+gboolean
+delegate_remove_extension (GtkFileChooser *chooser,
+                           const gchar *file_type,
+                           const gchar *extension)
+{
+  return gtk_file_chooser_remove_extension (get_delegate (chooser), file_type, extension);
+}
+
+void
+delegate_clear_extensions (GtkFileChooser *chooser)
+{
+  gtk_file_chooser_clear_extensions (get_delegate (chooser));
+}
+
+void
+delegate_set_force_valid_extension (GtkFileChooser *chooser,
+                                    gboolean force_valid_extension)
+{
+  gtk_file_chooser_set_force_valid_extension (get_delegate (chooser), force_valid_extension);
+}
+
+gboolean
+delegate_get_force_valid_extension (GtkFileChooser *chooser)
+{
+  return gtk_file_chooser_get_force_valid_extension (get_delegate (chooser));
+}
+
+gboolean
+delegate_set_current_extension_full (GtkFileChooser *chooser,
+                                     const gchar    *file_type,
+                                     const gchar    *extension)
+{
+  return gtk_file_chooser_set_current_extension_full (get_delegate (chooser), file_type, extension);
+}
+
+gboolean
+delegate_set_current_extension (GtkFileChooser *chooser,
+                                const gchar    *extension)
+{
+  return gtk_file_chooser_set_current_extension (get_delegate (chooser), extension);
+}
+
+gboolean
+delegate_set_current_file_type (GtkFileChooser *chooser,
+                                const gchar    *file_type)
+{
+  return gtk_file_chooser_set_current_file_type (get_delegate (chooser), file_type);
+}
+
+gchar *
+delegate_get_current_extension (GtkFileChooser *chooser)
+{
+  return gtk_file_chooser_get_current_extension (get_delegate (chooser));
+}
+
+gchar *
+delegate_get_current_file_type (GtkFileChooser *chooser)
+{
+  return gtk_file_chooser_get_current_file_type (get_delegate (chooser));
+}
+
+gboolean
+delegate_get_current_extension_supported (GtkFileChooser *chooser)
+{
+  return gtk_file_chooser_get_current_extension_supported (get_delegate (chooser));
 }
 
 static void

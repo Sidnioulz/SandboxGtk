@@ -158,6 +158,51 @@ void        gtk_file_chooser_set_current_name  (GtkFileChooser *chooser,
 GDK_AVAILABLE_IN_3_10
 gchar *gtk_file_chooser_get_current_name (GtkFileChooser *chooser);
 
+/* Methods for managing and enforcing supported extensions when saving files
+ */
+GDK_AVAILABLE_IN_3_14
+void
+gtk_file_chooser_add_extension    (GtkFileChooser *picker,
+                                   const gchar    *file_type,
+                                   const gchar    *extension);
+GDK_AVAILABLE_IN_3_14
+gboolean
+gtk_file_chooser_remove_extension (GtkFileChooser *chooser,
+                                   const gchar    *file_type,
+                                   const gchar    *extension);
+GDK_AVAILABLE_IN_3_14
+void
+gtk_file_chooser_clear_extensions (GtkFileChooser *chooser);
+GDK_AVAILABLE_IN_3_14
+void
+gtk_file_chooser_set_force_valid_extension (GtkFileChooser *chooser,
+                                            gboolean        force_valid_extension);
+GDK_AVAILABLE_IN_3_14
+gboolean
+gtk_file_chooser_get_force_valid_extension (GtkFileChooser *chooser);
+GDK_AVAILABLE_IN_3_14
+gboolean
+gtk_file_chooser_set_current_extension_full (GtkFileChooser *chooser,
+                                             const gchar    *file_type,
+                                             const gchar    *extension);
+GDK_AVAILABLE_IN_3_14
+gboolean
+gtk_file_chooser_set_current_extension (GtkFileChooser *chooser,
+                                        const gchar    *extension);
+GDK_AVAILABLE_IN_3_14
+gboolean
+gtk_file_chooser_set_current_file_type (GtkFileChooser *chooser,
+                                        const gchar    *file_type);
+GDK_AVAILABLE_IN_3_14
+gchar *
+gtk_file_chooser_get_current_extension (GtkFileChooser *chooser);
+GDK_AVAILABLE_IN_3_14
+gchar *
+gtk_file_chooser_get_current_file_type (GtkFileChooser *chooser);
+GDK_AVAILABLE_IN_3_14
+gboolean
+gtk_file_chooser_get_current_extension_supported (GtkFileChooser *chooser);
+
 /* Filename manipulation
  */
 GDK_AVAILABLE_IN_ALL
@@ -182,7 +227,6 @@ gboolean gtk_file_chooser_set_current_folder (GtkFileChooser *chooser,
 					      const gchar    *filename);
 GDK_AVAILABLE_IN_ALL
 gchar *  gtk_file_chooser_get_current_folder (GtkFileChooser *chooser);
-
 
 /* URI manipulation
  */

@@ -36,6 +36,7 @@
 #include "gtkentry.h"
 #include "gtkstack.h"
 #include "gtkexpander.h"
+#include "gtkfilechoosertypepicker.h"
 #include "gtkfilechooserprivate.h"
 #include "gtkfilechooserdialog.h"
 #include "gtkfilechooserembed.h"
@@ -54,11 +55,13 @@
 #include "gtksearchbar.h"
 #include "gtklabel.h"
 #include "gtkmarshalers.h"
+#include "gtkmenubutton.h"
 #include "gtkmessagedialog.h"
 #include "gtkmountoperation.h"
 #include "gtkpaned.h"
 #include "gtkpathbar.h"
 #include "gtkplacessidebar.h"
+#include "gtkpopover.h"
 #include "gtkprivate.h"
 #include "gtkradiobutton.h"
 #include "gtkrecentfilter.h"
@@ -76,7 +79,7 @@
 #include "gtktreeselection.h"
 #include "gtkbox.h"
 #include "gtkorientable.h"
-#include "gtkwindowgroup.h"
+#include "gtkwindow.h"
 #include "gtkintl.h"
 
 #include <cairo-gobject.h>
@@ -202,6 +205,11 @@ struct _GtkFileChooserWidgetPrivate {
   /* Save mode widgets */
   GtkWidget *save_widgets;
   GtkWidget *save_widgets_table;
+  GtkWidget *type_container;
+  GtkWidget *type_label;
+  GtkWidget *type_button_label;
+  GtkWidget *type_popover;
+  GtkWidget *type_picker;
 
   /* The file browsing widgets */
   GtkWidget *browse_widgets_box;
@@ -323,6 +331,7 @@ struct _GtkFileChooserWidgetPrivate {
   guint shortcuts_current_folder_active : 1;
   guint show_size_column : 1;
   guint create_folders : 1;
+  guint current_extension_supported : 1;
   guint auto_selecting_first_row : 1;
 };
 
@@ -450,6 +459,26 @@ static void           gtk_file_chooser_widget_add_filter         	   (GtkFileCho
 static void           gtk_file_chooser_widget_remove_filter      	   (GtkFileChooser    *chooser,
 									    GtkFileFilter     *filter);
 static GSList *       gtk_file_chooser_widget_list_filters       	   (GtkFileChooser    *chooser);
+static void           gtk_file_chooser_widget_add_extension          (GtkFileChooser    *chooser,
+                      const gchar    *file_type,
+                      const gchar    *extension);
+static gboolean       gtk_file_chooser_widget_remove_extension       (GtkFileChooser    *chooser,
+                      const gchar    *file_type,
+                      const gchar    *extension);
+static void           gtk_file_chooser_widget_clear_extensions       (GtkFileChooser    *chooser);
+static void           gtk_file_chooser_widget_set_force_valid_extension (GtkFileChooser *chooser,
+                      gboolean        force_valid_extension);
+static gboolean       gtk_file_chooser_widget_get_force_valid_extension (GtkFileChooser *chooser);
+static gboolean       gtk_file_chooser_widget_set_current_extension_full (GtkFileChooser *chooser,
+                      const gchar    *file_type,
+                      const gchar    *extension);
+static gboolean       gtk_file_chooser_widget_set_current_extension  (GtkFileChooser    *chooser,
+                      const gchar    *extension);
+static gboolean       gtk_file_chooser_widget_set_current_file_type  (GtkFileChooser    *chooser,
+                      const gchar    *file_type);
+static gchar *        gtk_file_chooser_widget_get_current_extension  (GtkFileChooser    *chooser);
+static gchar *        gtk_file_chooser_widget_get_current_file_type  (GtkFileChooser    *chooser);
+static gboolean       gtk_file_chooser_widget_get_current_extension_supported (GtkFileChooser *chooser);
 static gboolean       gtk_file_chooser_widget_add_shortcut_folder    (GtkFileChooser    *chooser,
 								       GFile             *file,
 								       GError           **error);
@@ -563,6 +592,17 @@ gtk_file_chooser_widget_iface_init (GtkFileChooserIface *iface)
   iface->get_current_folder = gtk_file_chooser_widget_get_current_folder;
   iface->set_current_name = gtk_file_chooser_widget_set_current_name;
   iface->get_current_name = gtk_file_chooser_widget_get_current_name;
+  iface->add_extension = gtk_file_chooser_widget_add_extension;
+  iface->remove_extension = gtk_file_chooser_widget_remove_extension;
+  iface->clear_extensions = gtk_file_chooser_widget_clear_extensions;
+  iface->set_force_valid_extension = gtk_file_chooser_widget_set_force_valid_extension;
+  iface->get_force_valid_extension = gtk_file_chooser_widget_get_force_valid_extension;
+  iface->set_current_extension_full = gtk_file_chooser_widget_set_current_extension_full;
+  iface->set_current_extension = gtk_file_chooser_widget_set_current_extension;
+  iface->set_current_file_type = gtk_file_chooser_widget_set_current_file_type;
+  iface->get_current_extension = gtk_file_chooser_widget_get_current_extension;
+  iface->get_current_file_type = gtk_file_chooser_widget_get_current_file_type;
+  iface->get_current_extension_supported = gtk_file_chooser_widget_get_current_extension_supported;
   iface->add_filter = gtk_file_chooser_widget_add_filter;
   iface->remove_filter = gtk_file_chooser_widget_remove_filter;
   iface->list_filters = gtk_file_chooser_widget_list_filters;
@@ -951,7 +991,7 @@ edited_idle_cb (GtkFileChooserWidget *impl)
   GtkFileChooserWidgetPrivate *priv = impl->priv;
 
   gdk_threads_enter ();
-  
+
   g_source_destroy (priv->edited_idle);
   priv->edited_idle = NULL;
 
@@ -1629,7 +1669,7 @@ file_list_add_menu_item (GtkFileChooserWidget *impl,
   g_signal_connect (item, "activate", callback, impl);
   gtk_widget_show (item);
   gtk_menu_shell_append (GTK_MENU_SHELL (priv->browse_files_popup_menu), item);
-  
+
   return item;
 }
 
@@ -1923,6 +1963,10 @@ static void
 location_entry_changed_cb (GtkEditable          *editable,
                            GtkFileChooserWidget *impl)
 {
+  const gchar *content = gtk_entry_get_text (GTK_ENTRY (editable));
+
+  gtk_file_chooser_type_picker_select_extension_from_path (GTK_FILE_CHOOSER_TYPE_PICKER (impl->priv->type_picker), content, NULL);
+
   if (impl->priv->action != GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER)
     reset_location_timeout (impl);
 }
@@ -1945,28 +1989,111 @@ location_entry_create (GtkFileChooserWidget *impl)
   gtk_entry_set_activates_default (GTK_ENTRY (priv->location_entry), TRUE);
 }
 
-/* Shows and hides the autocompletion widget popover in Save mode */
 static void
-on_autocompletion_button_toggled (GtkToggleButton *togglebutton,
-                                  gpointer         user_data)
+check_extension_legal (GtkFileChooserWidget *impl)
 {
-  static GtkWidget tmppop = NULL;
-  
-  if (!tmppop)
-  {
-    tmppop = gtk_popover_new (togglebutton);
-  }
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
 
-  if (!gtk_toggle_button_get_active (togglebutton))
+  gchar    *extension   = gtk_file_chooser_type_picker_get_current_extension (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker));
+  guint     type_count  = gtk_file_chooser_type_picker_get_extension_count (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker));
+
+  priv->current_extension_supported = !((extension == NULL) && type_count);
+
+  g_free (extension);
+
+  g_signal_emit_by_name (impl, "selection-changed", 0); /* TODO dirty hack, should keep my own signal */
+}
+
+static gchar *
+null_extension_label (gboolean force_valid)
+{
+  if (force_valid)
+    return g_strdup (_("<i>Unsupported file type, cannot save...</i>"));
+  else
+    return g_strdup (_("<i>Guessed from extension...</i>"));
+}
+
+static void
+force_valid_extension_set_cb (GtkFileChooserTypePicker *picker,
+                              gboolean                  force_valid,
+                              gpointer                  user_data)
+{
+  GtkFileChooserWidget        *impl = user_data;
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+  gchar                       *ext  = gtk_file_chooser_type_picker_get_current_extension (picker);
+
+  check_extension_legal (impl);
+
+  if (ext)
+    g_free (ext);
+  else
   {
-    gtk_widget_hide (tmppop);
-  
+    gchar *new_label = null_extension_label (force_valid);
+    gtk_label_set_markup_with_mnemonic (GTK_LABEL (priv->type_button_label), new_label);
+    g_free (new_label);
+  }
+}
+
+static void
+extension_changed_cb (GtkFileChooserTypePicker *picker,
+                      const gchar              *file_type,
+                      const gchar              *extension,
+                      gpointer                  user_data)
+{
+  GtkFileChooserWidget        *impl        = user_data;
+  GtkFileChooserWidgetPrivate *priv        = impl->priv;
+  gchar                       *new_label   = NULL;
+  gboolean                     force_valid = gtk_file_chooser_type_picker_get_force_valid_extension (picker);
+
+  if (extension)
+  {
+    new_label = g_strdup_printf ("%s (%s)", file_type, extension);
+
+    g_signal_handlers_block_by_func (priv->location_entry, G_CALLBACK (location_entry_changed_cb), impl);
+    gchar *updated_entry = NULL;
+    gchar *filename      = NULL;
+
+    filename = gtk_file_chooser_type_picker_extract_filename (gtk_entry_get_text (GTK_ENTRY (priv->location_entry)));
+    updated_entry = g_strdup_printf ("%s%s", filename, extension);
+    gtk_entry_set_text (GTK_ENTRY (priv->location_entry), updated_entry);
+
+    g_free (filename);
+    g_free (updated_entry);
+    g_signal_handlers_unblock_by_func (priv->location_entry, G_CALLBACK (location_entry_changed_cb), impl);
   }
   else
   {
-    gtk_widget_show (tmppop);
-  
+    new_label = null_extension_label (force_valid);
   }
+
+  gtk_label_set_markup_with_mnemonic (GTK_LABEL (priv->type_button_label), new_label);
+  g_free (new_label);
+
+  check_extension_legal (impl);
+  gtk_widget_hide (priv->type_popover);
+}
+
+static void
+extension_count_changed_cb (GtkFileChooserTypePicker *picker,
+                            const guint               count,
+                            gpointer                  user_data)
+{
+  GtkFileChooserWidget        *impl        = user_data;
+  GtkFileChooserWidgetPrivate *priv        = impl->priv;
+
+  if (count > 0)
+  {
+    gtk_widget_show (priv->type_container);
+    gtk_widget_show (priv->type_label);
+  }
+  else
+  {
+    gtk_widget_hide (priv->type_container);
+    gtk_widget_hide (priv->type_label);
+  }
+
+  /* enable/disable file saving if no valid extension */
+  check_extension_legal (impl);
 }
 
 /* Creates the widgets specific to Save mode */
@@ -1990,39 +2117,59 @@ save_widgets_create (GtkFileChooserWidget *impl)
   priv->save_widgets_table = gtk_grid_new ();
   gtk_container_set_border_width (GTK_CONTAINER (priv->save_widgets_table), 10);
   gtk_box_pack_start (GTK_BOX (vbox), priv->save_widgets_table, FALSE, FALSE, 0);
-  gtk_widget_show (priv->save_widgets_table);
   gtk_grid_set_row_spacing (GTK_GRID (priv->save_widgets_table), 12);
   gtk_grid_set_column_spacing (GTK_GRID (priv->save_widgets_table), 12);
 
   /* Label */
 
   widget = gtk_label_new_with_mnemonic (_("_Name:"));
-  gtk_widget_set_halign (widget, GTK_ALIGN_START);
+  gtk_widget_set_halign (widget, GTK_ALIGN_END);
   gtk_widget_set_valign (widget, GTK_ALIGN_CENTER);
   gtk_grid_attach (GTK_GRID (priv->save_widgets_table), widget, 0, 0, 1, 1);
-  gtk_widget_show (widget);
 
   /* Location entry */
 
   location_entry_create (impl);
   gtk_widget_set_hexpand (priv->location_entry, TRUE);
   gtk_grid_attach (GTK_GRID (priv->save_widgets_table), priv->location_entry, 1, 0, 1, 1);
-  gtk_widget_show (priv->location_entry);
   gtk_label_set_mnemonic_widget (GTK_LABEL (widget), priv->location_entry);
 
-  /* Autocompletion button */
+  /* File type label */
 
-  widget = gtk_button_new_with_mnemonic (_("File _Type: ##s"));
-  gtk_grid_attach (GTK_GRID (priv->save_widgets_table), widget, 2, 0, 1, 1);
-  g_signal_connect (widget, "toggled",
-                    G_CALLBACK (on_autocompletion_button_toggled),
-                    impl);
-  gtk_widget_show (widget);
+  priv->type_label = gtk_label_new_with_mnemonic (_("File _Type:"));
+  gtk_widget_set_halign (priv->type_label, GTK_ALIGN_END);
+  gtk_widget_set_valign (priv->type_label, GTK_ALIGN_CENTER);
+  gtk_grid_attach (GTK_GRID (priv->save_widgets_table), priv->type_label, 0, 1, 1, 1);
+
+  /* File type button with its label*/
+
+  priv->type_button_label = gtk_label_new (NULL);
+  gtk_label_set_markup_with_mnemonic (GTK_LABEL (priv->type_button_label), _("<i>Click to pick an extension...</i>"));
+  gtk_widget_set_halign (priv->type_button_label, GTK_ALIGN_START);
+  gtk_widget_set_valign (priv->type_button_label, GTK_ALIGN_CENTER);
+
+  priv->type_container = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_grid_attach (GTK_GRID (priv->save_widgets_table), priv->type_container, 1, 1, 1, 1);
+
+  widget = gtk_menu_button_new ();
+  gtk_container_add (GTK_CONTAINER (widget), priv->type_button_label);
+  gtk_box_pack_start (GTK_BOX (priv->type_container), widget, FALSE, FALSE, 0);
+  priv->type_popover = gtk_popover_new (widget);
+  gtk_menu_button_set_popover (GTK_MENU_BUTTON (widget), priv->type_popover);
+
+  priv->type_picker = gtk_file_chooser_type_picker_new ();
+  g_signal_connect (priv->type_picker, "extension-changed", (GCallback) extension_changed_cb, impl);
+  g_signal_connect (priv->type_picker, "extension-count-changed", (GCallback) extension_count_changed_cb, impl);
+  g_signal_connect (priv->type_picker, "force-valid-extension-set", (GCallback) force_valid_extension_set_cb, impl);
+  gtk_container_add (GTK_CONTAINER (priv->type_popover), priv->type_picker);
 
   priv->save_widgets = vbox;
   gtk_box_pack_start (GTK_BOX (impl), priv->save_widgets, FALSE, FALSE, 0);
   gtk_box_reorder_child (GTK_BOX (impl), priv->save_widgets, 0);
-  gtk_widget_show (priv->save_widgets);
+  gtk_widget_show_all (priv->save_widgets);
+
+  /* Hide extension picker until app registers extension */
+  extension_count_changed_cb (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker), 0, impl);
 }
 
 /* Destroys the widgets specific to Save mode */
@@ -2038,6 +2185,10 @@ save_widgets_destroy (GtkFileChooserWidget *impl)
   priv->save_widgets = NULL;
   priv->save_widgets_table = NULL;
   priv->location_entry = NULL;
+  priv->type_picker = NULL;
+  priv->type_popover = NULL;
+  priv->type_label = NULL;
+  priv->type_button_label = NULL;
 }
 
 /* Turns on the path bar widget.  Can be called even if we are already in that
@@ -2737,6 +2888,10 @@ gtk_file_chooser_widget_get_property (GObject    *object,
 
     case GTK_FILE_CHOOSER_PROP_CREATE_FOLDERS:
       g_value_set_boolean (value, priv->create_folders);
+      break;
+
+    case GTK_FILE_CHOOSER_PROP_CURRENT_EXTENSION_SUPPORTED:
+      g_value_set_boolean (value, priv->current_extension_supported);
       break;
 
     default:
@@ -3750,7 +3905,7 @@ stop_loading_and_clear_list_model (GtkFileChooserWidget *impl,
   GtkFileChooserWidgetPrivate *priv = impl->priv;
 
   load_remove_timer (impl, LOAD_EMPTY);
-  
+
   if (priv->browse_files_model)
     {
       g_object_unref (priv->browse_files_model);
@@ -4613,9 +4768,9 @@ maybe_select (GtkTreeModel *model,
   GtkTreeSelection *selection;
   gboolean is_sensitive;
   gboolean is_folder;
-  
+
   selection = gtk_tree_view_get_selection (GTK_TREE_VIEW (priv->browse_files_tree_view));
-  
+
   gtk_tree_model_get (model, iter,
                       MODEL_COL_IS_FOLDER, &is_folder,
                       MODEL_COL_IS_SENSITIVE, &is_sensitive,
@@ -4627,7 +4782,7 @@ maybe_select (GtkTreeModel *model,
     gtk_tree_selection_select_iter (selection, iter);
   else
     gtk_tree_selection_unselect_iter (selection, iter);
-    
+
   return FALSE;
 }
 
@@ -4663,6 +4818,114 @@ gtk_file_chooser_widget_unselect_all (GtkFileChooser *chooser)
   pending_select_files_free (impl);
 }
 
+static void
+gtk_file_chooser_widget_add_extension (GtkFileChooser *chooser,
+                                       const gchar    *file_type,
+                                       const gchar    *extension)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  gtk_file_chooser_type_picker_add_extension (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker), file_type, extension);
+}
+
+static gboolean
+gtk_file_chooser_widget_remove_extension (GtkFileChooser *chooser,
+                                          const gchar    *file_type,
+                                          const gchar    *extension)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return gtk_file_chooser_type_picker_remove_extension (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker), file_type, extension);
+}
+
+static void
+gtk_file_chooser_widget_clear_extensions (GtkFileChooser *chooser)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  gtk_file_chooser_type_picker_clear_extensions (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker));
+}
+
+static void
+gtk_file_chooser_widget_set_force_valid_extension (GtkFileChooser *chooser,
+                                                   gboolean force_valid_extension)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  gtk_file_chooser_type_picker_set_force_valid_extension (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker), force_valid_extension);
+}
+
+static gboolean
+gtk_file_chooser_widget_get_force_valid_extension (GtkFileChooser *chooser)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return gtk_file_chooser_type_picker_get_force_valid_extension (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker));
+}
+
+static gboolean
+gtk_file_chooser_widget_set_current_extension_full (GtkFileChooser *chooser,
+                                                    const gchar    *file_type,
+                                                    const gchar    *extension)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return gtk_file_chooser_type_picker_set_current_extension_full (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker), file_type, extension);
+}
+
+static gboolean
+gtk_file_chooser_widget_set_current_extension (GtkFileChooser *chooser,
+                                               const gchar    *extension)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return gtk_file_chooser_type_picker_set_current_extension (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker), extension);
+}
+
+static gboolean
+gtk_file_chooser_widget_set_current_file_type (GtkFileChooser *chooser,
+                                               const gchar    *file_type)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return gtk_file_chooser_type_picker_set_current_file_type (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker), file_type);
+}
+
+static gchar *
+gtk_file_chooser_widget_get_current_extension (GtkFileChooser *chooser)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return gtk_file_chooser_type_picker_get_current_extension (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker));
+}
+
+static gchar *
+gtk_file_chooser_widget_get_current_file_type (GtkFileChooser *chooser)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return gtk_file_chooser_type_picker_get_current_file_type (GTK_FILE_CHOOSER_TYPE_PICKER (priv->type_picker));
+}
+
+static gboolean
+gtk_file_chooser_widget_get_current_extension_supported (GtkFileChooser *chooser)
+{
+  GtkFileChooserWidget *impl = GTK_FILE_CHOOSER_WIDGET (chooser);
+  GtkFileChooserWidgetPrivate *priv = impl->priv;
+
+  return priv->current_extension_supported;
+}
+
 /* Checks whether the filename entry for the Save modes contains a well-formed filename.
  *
  * is_well_formed_ret - whether what the user typed passes gkt_file_system_make_path()
@@ -4671,6 +4934,14 @@ gtk_file_chooser_widget_unselect_all (GtkFileChooser *chooser)
  *
  * is_file_part_empty_ret - whether the file part is empty (will be if user types "foobar/", and
  *                          the path will be “$cwd/foobar”)
+ */
+/* TODO extend this function with a *has_valid_filename based on whether
+ * #priv->current_extension_supported is %FALSE or %TRUE. Should only do that
+ * check in actual save mode, and propagate the changes to #GtkFileChooserDialog
+ * to disable the Save button. A quicker method is used for now to spare
+ * development time.
+ *
+ * See also: check_extension_legal ().
  */
 static void
 check_save_entry (GtkFileChooserWidget *impl,
@@ -6026,7 +6297,7 @@ search_engine_hits_added_cb (GtkSearchEngine *engine,
 {
   GtkFileChooserWidget *impl;
   GList *l;
-  
+
   impl = GTK_FILE_CHOOSER_WIDGET (data);
 
   for (l = hits; l; l = l->next)
@@ -6039,9 +6310,9 @@ search_engine_finished_cb (GtkSearchEngine *engine,
 			   gpointer         data)
 {
   GtkFileChooserWidget *impl;
-  
+
   impl = GTK_FILE_CHOOSER_WIDGET (data);
-  
+
 #if 0
   /* EB: setting the model here will avoid loads of row events,
    * but it'll make the search look like blocked.
@@ -6074,7 +6345,7 @@ search_engine_error_cb (GtkSearchEngine *engine,
 			gpointer         data)
 {
   GtkFileChooserWidget *impl;
-  
+
   impl = GTK_FILE_CHOOSER_WIDGET (data);
 
   search_stop_searching (impl, TRUE);
@@ -6095,7 +6366,7 @@ search_clear_model (GtkFileChooserWidget *impl,
 
   g_object_unref (priv->search_model);
   priv->search_model = NULL;
-  
+
   if (remove_from_treeview)
     gtk_tree_view_set_model (GTK_TREE_VIEW (priv->browse_files_tree_view), NULL);
 }
@@ -6112,7 +6383,7 @@ search_stop_searching (GtkFileChooserWidget *impl,
       g_object_unref (priv->search_query);
       priv->search_query = NULL;
     }
-  
+
   if (priv->search_engine)
     {
       _gtk_search_engine_stop (priv->search_engine);
@@ -6184,7 +6455,7 @@ search_start_query (GtkFileChooserWidget *impl,
       priv->search_query = _gtk_query_new ();
       _gtk_query_set_text (priv->search_query, query_text);
     }
-  
+
   _gtk_search_engine_set_query (priv->search_engine, priv->search_query);
 
   g_signal_connect (priv->search_engine, "hits-added",
@@ -6228,7 +6499,7 @@ focus_entry_idle_cb (GtkFileChooserWidget *impl)
   GtkFileChooserWidgetPrivate *priv = impl->priv;
 
   gdk_threads_enter ();
-  
+
   g_source_destroy (priv->focus_entry_idle);
   priv->focus_entry_idle = NULL;
 
@@ -6370,9 +6641,9 @@ recent_idle_cleanup (gpointer data)
   gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (priv->recent_model), MODEL_COL_MTIME, GTK_SORT_DESCENDING);
 
   set_busy_cursor (impl, FALSE);
-  
+
   priv->load_recent_id = 0;
-  
+
   g_free (load_data);
 }
 
@@ -6678,7 +6949,7 @@ list_select_func  (GtkTreeSelection  *selection,
       if (!is_sensitive || !is_folder)
         return FALSE;
     }
-    
+
   return TRUE;
 }
 
@@ -6867,7 +7138,7 @@ location_popup_handler (GtkFileChooserWidget *impl,
       gtk_widget_grab_focus (widget_to_focus);
       return; 
     }
-  
+
   if (priv->action == GTK_FILE_CHOOSER_ACTION_OPEN ||
       priv->action == GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER)
     {
@@ -7499,6 +7770,7 @@ gtk_file_chooser_widget_init (GtkFileChooserWidget *impl)
   priv->sort_order = GTK_SORT_ASCENDING;
   priv->recent_manager = gtk_recent_manager_get_default ();
   priv->create_folders = TRUE;
+  priv->current_extension_supported = TRUE;
   priv->auto_selecting_first_row = FALSE;
 
   /* Ensure GTK+ private types used by the template

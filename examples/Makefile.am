@@ -23,6 +23,7 @@ noinst_PROGRAMS = \
 	hello-world				\
 	window-default				\
 	bloatpad				\
+	bloatpadfile				\
 	plugman					\
 	sunny					\
 	action-namespace			\
